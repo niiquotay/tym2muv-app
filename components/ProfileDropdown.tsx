@@ -37,12 +37,18 @@ const ProfileDropdown: React.FC = () => {
         className="w-9 h-9 rounded-full bg-slate-100 p-0.5 border border-slate-200 cursor-pointer hover:ring-2 hover:ring-brand-200 transition-all flex-shrink-0 flex items-center justify-center focus:outline-none"
         aria-label="User Profile Menu"
       >
-        <img
-          src={user?.avatar || 'https://via.placeholder.com/150'}
-          alt="User Avatar"
-          referrerPolicy="no-referrer"
-          className="w-full h-full rounded-full object-cover"
-        />
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt="User Avatar"
+            referrerPolicy="no-referrer"
+            className="w-full h-full rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold uppercase select-none">
+            {user?.name ? user.name.charAt(0) : (user?.fullName ? user.fullName.charAt(0) : 'U')}
+          </div>
+        )}
       </button>
 
       <AnimatePresence>
