@@ -10,7 +10,6 @@ import AdminRoute from './components/AdminRoute';
 import Icon from './components/Icon';
 import { logger } from './utils/logger';
 
-const Home = lazy(() => import('./pages/Home'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
 const PostAd = lazy(() => import('./pages/PostAd'));
 const CreateVendor = lazy(() => import('./pages/CreateVendor'));
@@ -151,7 +150,7 @@ const App: React.FC = () => {
               <Layout>
                 <Suspense fallback={<PageLoader />}>
                   <Routes>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<SearchPage />} />
                   <Route path="/signin" element={<SignIn defaultTab="signin" />} />
                   <Route path="/signup" element={<SignIn defaultTab="signup" />} />
                   <Route path="/admin-login" element={<AdminLogin />} />

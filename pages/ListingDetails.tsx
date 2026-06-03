@@ -603,7 +603,7 @@ const ListingDetails: React.FC = () => {
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Similar Properties</h2>
               <p className="text-slate-500 font-medium mt-1">Handpicked properties you might like in {listing.location}</p>
             </div>
-            <Link to="/search" className="px-6 py-3 bg-slate-50 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-all flex items-center gap-2">
+            <Link to="/" className="px-6 py-3 bg-slate-50 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-all flex items-center gap-2">
               View All
               <Icon name="chevronRight" size={18} />
             </Link>

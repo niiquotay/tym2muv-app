@@ -9,7 +9,6 @@ const MobileBottomNav = () => {
   
   const navItems = [
     { name: 'Home', path: '/', icon: 'home' },
-    { name: 'Search', path: '/search', icon: 'search' },
     { name: 'Saved', path: '/saved', icon: 'heart' },
     { name: 'Chat', path: '/chat', icon: 'messageCircle' },
     { name: 'Profile', path: isAuthenticated ? '/profile/me' : '/signin', icon: 'user' },

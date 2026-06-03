@@ -138,7 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (filters?.location) searchParams.set('location', filters.location);
     if (filters?.propertyType) searchParams.set('propertyType', filters.propertyType);
     
-    navigate(`/search?${searchParams.toString()}`);
+    navigate(`/?${searchParams.toString()}`);
   };
 
   const isAuthPage = location.pathname === '/signin' || location.pathname === '/signup' || location.pathname === '/admin-login';

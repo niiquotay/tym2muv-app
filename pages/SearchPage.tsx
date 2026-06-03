@@ -111,7 +111,7 @@ const SearchPage: React.FC = () => {
     }
 
     if (changed) {
-      navigate(`/search?${params.toString()}`, { replace: true });
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
   }, [debouncedFilters]);
 
@@ -255,7 +255,7 @@ const SearchPage: React.FC = () => {
             title="No properties found" 
             message="We couldn't find any properties matching your search criteria. Try adjusting your filters or search terms."
             actionLabel="Clear Filters"
-            onAction={() => navigate('/search')}
+            onAction={() => navigate('/')}
           />
         ) : (
           <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
