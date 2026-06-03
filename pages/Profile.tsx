@@ -243,9 +243,6 @@ const Profile: React.FC = () => {
                                  <Icon name="whatsapp" size={20} /> Chat
                               </a>
                           )}
-                          <Link to={`/chat?to=${user.id}`} className="flex-1 lg:flex-none bg-slate-900 text-white px-6 py-3 rounded-2xl hover:bg-slate-800 hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 font-bold shadow-md shadow-slate-900/20">
-                              <Icon name="messageCircle" size={20} /> Message
-                          </Link>
                         </>
                       )}
                    </div>

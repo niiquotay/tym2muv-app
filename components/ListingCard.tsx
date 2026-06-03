@@ -110,11 +110,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, seller, isLoading })
     else if (isRightSwipe) handlePrev();
   };
 
-  const handleChat = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate(`/chat?to=${listing.sellerId}`);
-  };
+
 
   const CardFace = ({ imageIndex, isBack = false }: { imageIndex: number; isBack?: boolean }) => (
     <div 
@@ -242,10 +238,11 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, seller, isLoading })
                             fallbackSrc={`https://ui-avatars.com/api/?name=${encodeURIComponent(seller?.name || 'User')}&background=random`}
                           />
                        </div>
-                       <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden group-hover/avatar:flex items-center gap-1 bg-white p-1 rounded-lg shadow-lg border border-slate-100 z-50">
-                           <button onClick={handleChat} className="w-6 h-6 flex items-center justify-center rounded bg-brand-50 text-brand-600 border border-brand-100"><Icon name="messageCircle" size={12} /></button>
-                           {seller?.socials.phone && <a href={`tel:${seller.socials.phone}`} className="w-6 h-6 flex items-center justify-center rounded bg-emerald-50 text-emerald-600 border border-emerald-100"><Icon name="phone" size={12} /></a>}
-                       </div>
+                       {seller?.socials.phone && (
+                         <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden group-hover/avatar:flex items-center gap-1 bg-white p-1 rounded-lg shadow-lg border border-slate-100 z-50">
+                             <a href={`tel:${seller.socials.phone}`} className="w-6 h-6 flex items-center justify-center rounded bg-emerald-50 text-emerald-600 border border-emerald-100"><Icon name="phone" size={12} /></a>
+                         </div>
+                       )}
                      </div>
                  </div>
                )
