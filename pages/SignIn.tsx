@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { loginWithGoogle, loginWithLinkedIn } from '../services/supabaseService';
+import { loginWithGoogle, loginWithLinkedIn, loginWithEmail, signupWithEmail } from '../services/supabaseService';
 import Icon from '../components/Icon';
 import { Logo } from '../components/Logo';
 
@@ -18,6 +18,11 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
   const [isSignUp, setIsSignUp] = React.useState(defaultTab === 'signup' || location.pathname === '/signup');
   const [selectedRole, setSelectedRole] = React.useState<'Tenant' | 'Agent'>('Tenant');
   const [agreedToTerms, setAgreedToTerms] = React.useState(false);
+  
+  // Email/Password states
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [name, setName] = React.useState('');
 
   React.useEffect(() => {
     setIsSignUp(defaultTab === 'signup' || location.pathname === '/signup');
@@ -45,6 +50,48 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with LinkedIn.');
       console.error(err);
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please provide both email and passcode.');
+      return;
+    }
+    if (isSignUp && !name) {
+      setError('Please provide your name.');
+      return;
+    }
+    if (isSignUp && !agreedToTerms) {
+      setError('Please accept terms and conditions.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      setMessage(null);
+
+      const targetRole = selectedRole === 'Agent' ? 'Agent' : 'Tenant';
+      if (isSignUp) {
+        await signupWithEmail(email, password, name, targetRole);
+        setMessage('Registration successful! Decrypting your secure session...');
+      } else {
+        await loginWithEmail(email, password, targetRole);
+        setMessage('Authentication successful! Logging in...');
+      }
+
+      window.dispatchEvent(new Event('storage'));
+
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
+    } catch (err: any) {
+      console.error('Email auth error:', err);
+      setError(err.message || 'Failed to authenticate secure candidate channel.');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -124,20 +171,114 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
               </button>
             </div>
 
-            {isSignUp && (
-              <div id="terms-checkbox-container" className="flex items-start gap-3 bg-brand-50/40 border border-brand-100/50 p-4 rounded-2xl animate-fade-in transition-all">
-                <input
-                  id="signup-agree-checkbox"
-                  type="checkbox"
-                  checked={agreedToTerms}
-                  onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-brand-200 text-brand-600 focus:ring-brand-500 hover:border-brand-400 accent-brand-600 cursor-pointer"
-                />
-                <label id="signup-agree-label" htmlFor="signup-agree-checkbox" className="text-xs text-slate-700 font-semibold cursor-pointer leading-relaxed select-none">
-                  I consent to CaliberDesk's secure profile registration and agree to the <Link to="/info/terms" className="text-brand-600 hover:underline font-bold" target="_blank">Terms of Service</Link> and <Link to="/info/privacy" className="text-brand-600 hover:underline font-bold" target="_blank">Privacy Policy</Link>.
-                </label>
+            <form onSubmit={handleEmailAuth} className="space-y-6 w-full">
+              {isSignUp && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-500 text-xs font-mono font-bold tracking-wider uppercase ml-1">
+                    FULL_NAME
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="user" size={18} />
+                    </div>
+                    <input
+                      id="signup-name-field"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. John Doe"
+                      required
+                      disabled={isLoading}
+                      className="w-full pl-12 pr-4 py-4 bg-white/80 border border-purple-100 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all text-sm font-sans"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-500 text-xs font-mono font-bold tracking-wider uppercase ml-1">
+                    EMAIL_ADDRESS
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="mail" size={18} />
+                    </div>
+                    <input
+                      id="signin-email-field"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. email@example.com"
+                      required
+                      disabled={isLoading}
+                      className="w-full pl-12 pr-4 py-4 bg-white/80 border border-purple-100 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all text-sm font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-500 text-xs font-mono font-bold tracking-wider uppercase ml-1">
+                    PASSWORD
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                      <Icon name="lock" size={18} />
+                    </div>
+                    <input
+                      id="signin-password-field"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••••••••"
+                      required
+                      disabled={isLoading}
+                      className="w-full pl-12 pr-4 py-4 bg-white/80 border border-purple-100 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all text-sm font-sans"
+                    />
+                  </div>
+                </div>
               </div>
-            )}
+
+              {isSignUp && (
+                <div id="terms-checkbox-container" className="flex items-start gap-3 bg-brand-50/40 border border-brand-100/50 p-4 rounded-2xl animate-fade-in transition-all">
+                  <input
+                    id="signup-agree-checkbox"
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-brand-200 text-brand-600 focus:ring-brand-500 hover:border-brand-400 accent-brand-600 cursor-pointer"
+                  />
+                  <label id="signup-agree-label" htmlFor="signup-agree-checkbox" className="text-xs text-slate-700 font-semibold cursor-pointer leading-relaxed select-none">
+                    I consent to CaliberDesk's secure profile registration and agree to the <Link to="/info/terms" className="text-brand-600 hover:underline font-bold" target="_blank">Terms of Service</Link> and <Link to="/info/privacy" className="text-brand-600 hover:underline font-bold" target="_blank">Privacy Policy</Link>.
+                  </label>
+                </div>
+              )}
+
+              <button
+                id="email-auth-submit-btn"
+                type="submit"
+                disabled={isLoading || (isSignUp && !agreedToTerms)}
+                className="w-full py-5 text-sm font-mono font-bold text-white rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 transition-all duration-300 shadow-[0_8px_30px_rgba(139,92,246,0.25)] hover:shadow-[0_12px_40px_rgba(139,92,246,0.35)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>ESTABLISHING_SECURE_BRIDGE...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="key" size={16} />
+                    <span>{isSignUp ? 'REGISTER_ACCOUNT' : 'DECRYPT_CREDENTIAL_GATEWAY'}</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="relative flex py-5 items-center w-full">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-4 text-slate-450 font-mono text-[10px] font-bold tracking-wider uppercase">OR_USE_AUTHENTICATORS</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
 
             {/* Futuristic Larger Social Authentication Buttons with logos only */}
             <div className="flex flex-col items-center gap-4">
@@ -175,7 +316,7 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
               </div>
 
               {isSignUp && !agreedToTerms && (
-                <p id="consent-warning-msg" className="text-center text-[10px] font-mono text-purple-650 font-bold tracking-wider animate-pulse mt-1">
+                <p id="consent-warning-msg" className="text-center text-[10px] font-mono text-purple-600 font-bold tracking-wider animate-pulse mt-1">
                   ⚡ PLEASE ACCEPT REGISTRATION CONSENT TO OPEN GATEWAY
                 </p>
               )}
