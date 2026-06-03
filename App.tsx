@@ -190,11 +190,8 @@ const App: React.FC = () => {
                       <SavedListings />
                     </ProtectedRoute>
                   } />
-                  <Route path="/rent-financing" element={
-                    <ProtectedRoute>
-                      <RentFinancing />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="/rent-financing" element={<RentFinancing />} />
+
                   <Route path="/settings" element={
                     <ProtectedRoute>
                       <Settings />

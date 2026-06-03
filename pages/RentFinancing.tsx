@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
+
 import { submitRentFinancingApplication, getRentFinancingApplications } from '../services/supabaseService';
 import { RentFinancingApplication } from '../types';
 import Icon from '../components/Icon';
@@ -22,7 +24,8 @@ const EMPLOYMENT_STATUSES = [
 ];
 
 const RentFinancing: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
+  const navigate = useNavigate();
   const { location: userLoc } = useLocation();
   const [activeTab, setActiveTab] = useState<'apply' | 'history'>('apply');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +33,24 @@ const RentFinancing: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [applications, setApplications] = useState<RentFinancingApplication[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate('/signin', { state: { from: '/rent-financing' } });
+    }
+  }, [isAuthenticated, loading, navigate]);
+
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"></div>
+          <p className="mt-4 text-sm font-medium text-slate-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
 
   // Form State
   const [formData, setFormData] = useState({
