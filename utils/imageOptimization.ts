@@ -1,4 +1,7 @@
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo';
+const VITE_CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUD_NAME = VITE_CLOUDINARY_CLOUD_NAME && !VITE_CLOUDINARY_CLOUD_NAME.startsWith('your-') 
+  ? VITE_CLOUDINARY_CLOUD_NAME 
+  : null;
 
 export interface ImageOptions {
   width?: number;
@@ -11,6 +14,9 @@ export interface ImageOptions {
 export function getOptimizedImageUrl(publicIdOrUrl: string | undefined | null, options: ImageOptions = {}): string {
   if (!publicIdOrUrl) return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E";
   
+  if (!CLOUD_NAME) {
+    return publicIdOrUrl;
+  }
   const {
     width,
     height,

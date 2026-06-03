@@ -5,7 +5,11 @@ const DATADOG_CLIENT_TOKEN = import.meta.env.VITE_DATADOG_CLIENT_TOKEN;
 const DATADOG_SITE = import.meta.env.VITE_DATADOG_SITE || 'datadoghq.com';
 const ENV = import.meta.env.VITE_ENV || 'development';
 
-if (DATADOG_CLIENT_TOKEN) {
+const isDatadogConfigured = 
+  DATADOG_CLIENT_TOKEN && 
+  !DATADOG_CLIENT_TOKEN.startsWith('your-');
+
+if (isDatadogConfigured) {
   datadogLogs.init({
     clientToken: DATADOG_CLIENT_TOKEN,
     site: DATADOG_SITE,

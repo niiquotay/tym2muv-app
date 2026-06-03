@@ -8,7 +8,13 @@ const DATADOG_CLIENT_TOKEN = import.meta.env.VITE_DATADOG_CLIENT_TOKEN;
 const DATADOG_SITE = import.meta.env.VITE_DATADOG_SITE || 'datadoghq.com';
 const ENV = import.meta.env.VITE_ENV || 'development';
 
-if (DATADOG_APP_ID && DATADOG_CLIENT_TOKEN) {
+const isDatadogConfigured = 
+  DATADOG_APP_ID && 
+  DATADOG_CLIENT_TOKEN && 
+  !DATADOG_APP_ID.startsWith('your-') && 
+  !DATADOG_CLIENT_TOKEN.startsWith('your-');
+
+if (isDatadogConfigured) {
   datadogRum.init({
     applicationId: DATADOG_APP_ID,
     clientToken: DATADOG_CLIENT_TOKEN,
