@@ -27,15 +27,82 @@ ALTER VIEW public.agent_stats SET (security_invoker = true);
 ALTER VIEW public.admin_dashboard_metrics SET (security_invoker = true);
 
 -- ==========================================
--- STEP 3: RESOLVE SEARCH PATH MUTABILITY WARNINGS
+-- STEP 3: RESOLVE SEARCH PATH MUTABILITY & DEFINER RPC WARNINGS
 -- ==========================================
--- Set explicit search paths on SECURITY DEFINER functions to prevent search path hijacking.
-ALTER FUNCTION public.is_admin() SET search_path = public;
-ALTER FUNCTION public.is_super_admin() SET search_path = public;
-ALTER FUNCTION public.get_user_role() SET search_path = public;
-ALTER FUNCTION public.log_admin_action(text, text, uuid, text, jsonb) SET search_path = public;
+-- 3.1 Create a private schema that is not exposed to the PostgREST API
+CREATE SCHEMA IF NOT EXISTS private;
+
+-- 3.2 Define the internal helper functions as SECURITY DEFINER in the private schema
+CREATE OR REPLACE FUNCTION private.is_admin_definer() 
+RETURNS BOOLEAN 
+SECURITY DEFINER 
+SET search_path = public 
+AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role IN ('admin', 'super_admin')
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION private.is_super_admin_definer() 
+RETURNS BOOLEAN 
+SECURITY DEFINER 
+SET search_path = public 
+AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() AND role = 'super_admin'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION private.get_user_role_definer() 
+RETURNS public.user_role 
+SECURITY DEFINER 
+SET search_path = public 
+AS $$
+    SELECT role FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE;
+
+-- 3.3 Grant EXECUTE on private functions to anon, authenticated, and service_role so RLS policies can invoke them
+GRANT EXECUTE ON FUNCTION private.is_admin_definer() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION private.is_super_admin_definer() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION private.get_user_role_definer() TO anon, authenticated, service_role;
+
+-- 3.4 Convert public API functions to SECURITY INVOKER wrappers (hides from RPC security linter warnings)
+CREATE OR REPLACE FUNCTION public.is_admin() 
+RETURNS BOOLEAN 
+SECURITY INVOKER 
+SET search_path = public 
+AS $$
+BEGIN
+    RETURN private.is_admin_definer();
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.is_super_admin() 
+RETURNS BOOLEAN 
+SECURITY INVOKER 
+SET search_path = public 
+AS $$
+BEGIN
+    RETURN private.is_super_admin_definer();
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.get_user_role() 
+RETURNS public.user_role 
+SECURITY INVOKER 
+SET search_path = public 
+AS $$
+    SELECT private.get_user_role_definer();
+$$ LANGUAGE sql STABLE;
+
+-- 3.5 Set search path on remaining utility functions
 ALTER FUNCTION public.set_updated_at() SET search_path = public;
-ALTER FUNCTION public.log_property_view(uuid, uuid, text) SET search_path = public;
 
 -- ==========================================
 -- STEP 4: RESOLVE DYNAMIC RLS INSERT POLICY ON PROPERTY_VIEWS
@@ -48,23 +115,15 @@ FOR INSERT WITH CHECK (
 );
 
 -- ==========================================
--- STEP 5: RESOLVE SECURITY DEFINER RPC ACCESS FOR PUBLIC ROLES
+-- STEP 5: RESTRICT SENSITIVE/UTILITY FUNCTIONS ACCESS
 -- ==========================================
--- 5.1 Revoke EXECUTE on all SECURITY DEFINER functions from PUBLIC (which includes anon and authenticated)
-REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.is_super_admin() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.get_user_role() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.log_admin_action(text, text, uuid, text, jsonb) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.log_property_view(uuid, uuid, text) FROM PUBLIC;
-
--- 5.2 Grant EXECUTE only to specific roles who require execution access
--- The RBAC helper functions are queried during table RLS checks, so all client roles must be able to execute them.
-GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.is_super_admin() TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.get_user_role() TO anon, authenticated, service_role;
-
--- log_admin_action is a sensitive operation and should only be triggered by the service_role edge function backend
+-- 5.1 log_admin_action is sensitive and should only be executable by the service_role key
+ALTER FUNCTION public.log_admin_action(text, text, uuid, text, jsonb) SET search_path = public;
+REVOKE EXECUTE ON FUNCTION public.log_admin_action(text, text, uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.log_admin_action(text, text, uuid, text, jsonb) TO service_role;
 
--- log_property_view is safe to trigger by authenticated users and anonymous website guests
+-- 5.2 log_property_view is invoked directly by clients. Switch to SECURITY INVOKER to resolve definer warnings.
+ALTER FUNCTION public.log_property_view(uuid, uuid, text) SECURITY INVOKER;
+ALTER FUNCTION public.log_property_view(uuid, uuid, text) SET search_path = public;
 GRANT EXECUTE ON FUNCTION public.log_property_view(uuid, uuid, text) TO anon, authenticated, service_role;
+
