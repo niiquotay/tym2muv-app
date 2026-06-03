@@ -1,0 +1,19 @@
+# Supabase CLI Configuration File
+# This file governs local development environments and serves as the Configuration-as-Code
+# manifest for deployment hardening.
+
+api_version = 1
+
+[project]
+name = "caliberdesk"
+
+[auth]
+# Minimum password length requirement
+minimum_password_length = 8
+
+[auth.security]
+# Enforce check against HaveIBeenPwned database to prevent compromised or leaked passwords
+leaked_passwords_enabled = true
+
+# Require at least one uppercase, lowercase, numeric, and special character
+password_required_characters = ["lowercase", "uppercase", "digits", "symbols"]
