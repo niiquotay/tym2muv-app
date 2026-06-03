@@ -5,10 +5,20 @@ import { logger } from '../utils/logger';
 const redisUrl = import.meta.env.VITE_UPSTASH_REDIS_REST_URL;
 const redisToken = import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN;
 
+export const isRedisConfigured =
+  !!redisUrl &&
+  !!redisToken &&
+  redisUrl.startsWith('https://') &&
+  !redisUrl.includes('your-upstash-redis-url') &&
+  !redisToken.includes('your-upstash-redis-token') &&
+  !redisUrl.includes('placeholder') &&
+  !redisToken.includes('placeholder');
+
 // Initialize Redis client conditionally to handle missing credentials gracefully
-export const redisClient = redisUrl && redisToken 
+export const redisClient = isRedisConfigured
   ? new Redis({ url: redisUrl, token: redisToken })
   : null;
+
 
 /**
  * Valid caching TTLs in seconds as requested:
