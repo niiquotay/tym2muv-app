@@ -313,8 +313,22 @@ export const ensureUserProfileExists = async (
       }
 
       if (insertError) {
-        console.error('Failed to create fallback user profile after retry:', insertError);
-        return null;
+        console.error('Failed to create fallback user profile after retry, using local fallback:', insertError);
+        return {
+          id: userId,
+          name: fullName,
+          avatar: avatarUrl,
+          email: email || '',
+          role: 'Tenant',
+          rating: 0,
+          reviewCount: 0,
+          location: '',
+          memberSince: new Date().toISOString(),
+          bio: '',
+          verified: false,
+          savedListings: [],
+          socials: {}
+        };
       }
 
       if (insertRole === 'agent') {

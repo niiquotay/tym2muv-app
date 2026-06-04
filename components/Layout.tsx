@@ -124,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const currentYear = new Date().getFullYear();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const { location: userLocData, refreshLocation, isLoading: isLocating, needsCountrySelection } = useAppLocation();
 
   const handleSearch = (query: string, filters?: SearchFilters) => {
@@ -208,7 +208,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </Link>
 
                     {/* Auth */}
-                    {isAuthenticated ? (
+                    {loading ? (
+                      <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 animate-pulse flex-shrink-0" />
+                    ) : isAuthenticated ? (
                     <>
                         {/* Admin Link */}
                         {(user?.role === 'Admin' || user?.socials?.email === 'info@caliberdesk.com') && (
