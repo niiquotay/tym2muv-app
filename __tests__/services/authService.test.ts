@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loginWithEmail, signupWithEmail, logout, subscribeToAuth, sendPasswordResetEmail, confirmPasswordReset } from '../../services/supabaseService';
+import { loginWithEmail, signupWithEmail, logout, subscribeToAuth, sendPasswordResetEmail, confirmPasswordReset, ensureUserProfileExists } from '../../services/supabaseService';
 import { mockSupabase } from '../mocks/supabase';
 
 describe('Auth Service', () => {
@@ -60,6 +60,104 @@ describe('Auth Service', () => {
     const unsub = subscribeToAuth(callback);
     expect(mockSupabase.auth.onAuthStateChange).toHaveBeenCalled();
     expect(typeof unsub).toBe('function');
+  });
+
+  describe('ensureUserProfileExists', () => {
+    it('returns existing profile if it already exists', async () => {
+      // Mock profiles select to return an existing profile
+      const mockProfile = { id: 'user-123', full_name: 'Existing User', role: 'tenant', avatar_url: 'http://avatar.com' };
+      vi.spyOn(mockSupabase, 'from').mockImplementation((table: string) => {
+        if (table === 'profiles') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockProfile, error: null }),
+            update: vi.fn().mockReturnThis()
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const profile = await ensureUserProfileExists('user-123', 'test@test.com', {});
+      expect(profile).not.toBeNull();
+      expect(profile?.name).toBe('Existing User');
+      expect(profile?.role).toBe('Tenant'); // Mapped to capitalized Tenant
+    });
+
+    it('creates profile if missing, falling back if initial insert fails', async () => {
+      // Mock profiles select to return null (profile missing)
+      // First insert fails, second retry insert succeeds
+      let insertCallCount = 0;
+      vi.spyOn(mockSupabase, 'from').mockImplementation((table: string) => {
+        if (table === 'profiles') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            insert: vi.fn().mockImplementation(() => {
+              insertCallCount++;
+              if (insertCallCount === 1) {
+                // Initial insert fails (e.g. enum violation)
+                return {
+                  select: vi.fn().mockReturnThis(),
+                  single: vi.fn().mockResolvedValue({ data: null, error: new Error('invalid input value for enum user_role: "tenant"') })
+                };
+              } else {
+                // Retry insert succeeds with fallback role ('user')
+                return {
+                  select: vi.fn().mockReturnThis(),
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: 'user-123', full_name: 'New User', role: 'user', avatar_url: '' },
+                    error: null
+                  })
+                };
+              }
+            })
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const profile = await ensureUserProfileExists('user-123', 'test@test.com', { name: 'New User' }, 'Tenant');
+      expect(profile).not.toBeNull();
+      expect(insertCallCount).toBe(2); // Initial insert and fallback retry
+      expect(profile?.name).toBe('New User');
+      expect(profile?.role).toBe('Tenant'); // Mapped to capitalized Tenant
+    });
+
+    it('creates agent profile and agent record if role is agent', async () => {
+      const mockProfile = { id: 'agent-123', full_name: 'Agent User', role: 'agent', avatar_url: '' };
+      let agentInsertCalled = false;
+      
+      vi.spyOn(mockSupabase, 'from').mockImplementation((table: string) => {
+        if (table === 'profiles') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({ data: mockProfile, error: null })
+            })
+          } as any;
+        } else if (table === 'agents') {
+          return {
+            insert: vi.fn().mockImplementation((data: any) => {
+              if (data.id === 'agent-123') {
+                agentInsertCalled = true;
+              }
+              return { error: null };
+            })
+          } as any;
+        }
+        return {} as any;
+      });
+
+      const profile = await ensureUserProfileExists('agent-123', 'agent@test.com', { name: 'Agent User' }, 'Agent');
+      expect(profile).not.toBeNull();
+      expect(profile?.role).toBe('Agent');
+      expect(agentInsertCalled).toBe(true);
+    });
   });
 });
 
