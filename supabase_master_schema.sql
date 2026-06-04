@@ -205,18 +205,45 @@ CREATE TRIGGER update_sys_modtime BEFORE UPDATE ON system_settings FOR EACH ROW 
 -- Auto-insert into profiles when auth.users is created
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  selected_role public.user_role;
+  full_name_val TEXT;
+  avatar_url_val TEXT;
 BEGIN
+  -- Coalesce name from multiple keys sent by social providers or fallback to email local part
+  full_name_val := COALESCE(
+      NEW.raw_user_meta_data->>'full_name', 
+      NEW.raw_user_meta_data->>'name',
+      NEW.raw_user_meta_data->>'given_name',
+      split_part(NEW.email, '@', 1),
+      'User'
+  );
+  
+  -- Coalesce avatar url from picture, avatar_url, etc.
+  avatar_url_val := COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      NEW.raw_user_meta_data->>'picture',
+      NEW.raw_user_meta_data->>'avatar'
+  );
+
+  -- Safely parse role
+  selected_role := COALESCE(
+      (NEW.raw_user_meta_data->>'role')::public.user_role, 
+      'tenant'::public.user_role
+  );
+
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
   VALUES (
       NEW.id, 
-      NEW.raw_user_meta_data->>'full_name', 
-      NEW.raw_user_meta_data->>'avatar_url',
-      COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'tenant')
+      full_name_val, 
+      avatar_url_val,
+      selected_role
   );
+  
   -- If role is agent, insert into agents table
-  IF NEW.raw_user_meta_data->>'role' = 'agent' THEN
+  IF selected_role = 'agent' THEN
       INSERT INTO public.agents (id, company_name)
-      VALUES (NEW.id, NEW.raw_user_meta_data->>'company_name');
+      VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'company_name', ''));
   END IF;
   RETURN NEW;
 END;
@@ -281,6 +308,7 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- 8.1 PROFILES & AGENTS
 CREATE POLICY "Public can view non-blocked profiles" ON profiles FOR SELECT USING (is_blocked = false OR is_admin());
+CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Public can view agents" ON agents FOR SELECT USING (true);
 CREATE POLICY "Agents can update own profile" ON agents FOR UPDATE USING (auth.uid() = id);

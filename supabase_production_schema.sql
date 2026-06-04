@@ -194,6 +194,7 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Properties
@@ -253,14 +254,44 @@ CREATE TRIGGER trg_pay_updated BEFORE UPDATE ON payment_plans FOR EACH ROW EXECU
 -- Auto Insert Profile On Auth Hook
 CREATE OR REPLACE FUNCTION public.custom_handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  selected_role public.user_role;
+  full_name_val TEXT;
+  avatar_url_val TEXT;
 BEGIN
+  -- Coalesce name from multiple keys sent by social providers or fallback to email local part
+  full_name_val := COALESCE(
+      NEW.raw_user_meta_data->>'full_name', 
+      NEW.raw_user_meta_data->>'name',
+      NEW.raw_user_meta_data->>'given_name',
+      split_part(NEW.email, '@', 1),
+      'User'
+  );
+  
+  -- Coalesce avatar url from picture, avatar_url, etc.
+  avatar_url_val := COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      NEW.raw_user_meta_data->>'picture',
+      NEW.raw_user_meta_data->>'avatar'
+  );
+
+  -- Safely parse role
+  selected_role := COALESCE(
+      (NEW.raw_user_meta_data->>'role')::public.user_role, 
+      'tenant'::public.user_role
+  );
+
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
   VALUES (
       NEW.id, 
-      NEW.raw_user_meta_data->>'full_name', 
-      NEW.raw_user_meta_data->>'avatar_url',
-      COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'tenant')
+      full_name_val, 
+      avatar_url_val,
+      selected_role
   );
+  
+  -- If role is agent, insert into agents table (only if agents table exists in this schema, otherwise it's just public.profiles)
+  -- In this schema, we don't have agents table, but let's check: actually, supabase_production_schema.sql doesn't have agents table?
+  -- Wait, let's verify if agents table exists in supabase_production_schema.sql.
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

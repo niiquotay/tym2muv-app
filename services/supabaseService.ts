@@ -148,30 +148,36 @@ export const confirmPasswordReset = async (code: string, newPassword: string) =>
   await supabase.auth.updateUser({ password: newPassword });
 };
 
-export const loginWithGoogle = async () => {
+export const loginWithGoogle = async (role?: string) => {
   if (!isSupabaseConfigured) {
-    const randomUser = MOCK_USERS.find(u => u.role === 'Agent') || MOCK_USERS[1];
-    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: 'demo_agent@tym2muv.com' }));
+    const targetRole = role === 'Agent' ? 'Agent' : 'Tenant';
+    const randomUser = MOCK_USERS.find(u => u.role === targetRole) || MOCK_USERS[1];
+    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: `demo_${targetRole.toLowerCase()}@tym2muv.com` }));
     window.location.href = '/';
     return;
   }
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: `${window.location.origin}/` }
+    options: { 
+      redirectTo: `${window.location.origin}/`
+    }
   });
   if (error) throw error;
 };
 
-export const loginWithLinkedIn = async () => {
+export const loginWithLinkedIn = async (role?: string) => {
   if (!isSupabaseConfigured) {
-    const randomUser = MOCK_USERS.find(u => u.role === 'Tenant') || MOCK_USERS[4];
-    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: 'demo_tenant@tym2muv.com' }));
+    const targetRole = role === 'Agent' ? 'Agent' : 'Tenant';
+    const randomUser = MOCK_USERS.find(u => u.role === targetRole) || MOCK_USERS[4];
+    localStorage.setItem('caliber_mock_user', JSON.stringify({ ...randomUser, email: `demo_${targetRole.toLowerCase()}@tym2muv.com` }));
     window.location.href = '/';
     return;
   }
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
-    options: { redirectTo: `${window.location.origin}/` }
+    options: { 
+      redirectTo: `${window.location.origin}/`
+    }
   });
   if (error) throw error;
 };
@@ -241,6 +247,89 @@ export const updateUserProfile = async (userId: string, updates: Partial<User>) 
   if (Object.keys(dbUpdates).length > 0) {
     await supabase.from('profiles').update(dbUpdates).eq('id', userId);
     await delCache(cacheKey('profile', userId));
+  }
+};
+
+export const ensureUserProfileExists = async (
+  userId: string, 
+  email: string | undefined, 
+  metadata: any, 
+  selectedRole?: string
+): Promise<User | null> => {
+  if (!isSupabaseConfigured) {
+    const user = MOCK_USERS.find(u => u.id === userId);
+    return user || null;
+  }
+
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const targetRole = (selectedRole || metadata?.role || 'Tenant').toLowerCase() === 'agent' ? 'agent' : 'tenant';
+
+    if (error || !profile) {
+      const fullName = metadata?.full_name || metadata?.name || metadata?.given_name || (email ? email.split('@')[0] : 'User');
+      const avatarUrl = metadata?.avatar_url || metadata?.picture || metadata?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`;
+
+      const { data: newProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          full_name: fullName,
+          avatar_url: avatarUrl,
+          role: targetRole
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Failed to create fallback user profile:', insertError);
+        return null;
+      }
+
+      if (targetRole === 'agent') {
+        const { error: agentError } = await supabase
+          .from('agents')
+          .insert({ id: userId, verification_status: 'pending' });
+        if (agentError) {
+          console.error('Failed to create agent record:', agentError);
+        }
+      }
+
+      await delCache(cacheKey('profile', userId));
+      return mapProfileToUser(newProfile);
+    } else {
+      if (selectedRole && profile.role !== targetRole) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ role: targetRole })
+          .eq('id', userId);
+
+        if (!updateError) {
+          profile.role = targetRole;
+          
+          if (targetRole === 'agent') {
+            const { data: agentData } = await supabase
+              .from('agents')
+              .select('id')
+              .eq('id', userId)
+              .maybeSingle();
+              
+            if (!agentData) {
+              await supabase.from('agents').insert({ id: userId, verification_status: 'pending' });
+            }
+          }
+          await delCache(cacheKey('profile', userId));
+        }
+      }
+      return mapProfileToUser(profile);
+    }
+  } catch (err) {
+    console.error('Error in ensureUserProfileExists:', err);
+    return null;
   }
 };
 

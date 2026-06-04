@@ -157,13 +157,39 @@ CREATE TRIGGER update_payment_plans_modtime BEFORE UPDATE ON payment_plans FOR E
 -- ==========================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  selected_role public.user_role;
+  full_name_val TEXT;
+  avatar_url_val TEXT;
 BEGIN
+  -- Coalesce name from multiple keys sent by social providers or fallback to email local part
+  full_name_val := COALESCE(
+      NEW.raw_user_meta_data->>'full_name', 
+      NEW.raw_user_meta_data->>'name',
+      NEW.raw_user_meta_data->>'given_name',
+      split_part(NEW.email, '@', 1),
+      'User'
+  );
+  
+  -- Coalesce avatar url from picture, avatar_url, etc.
+  avatar_url_val := COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      NEW.raw_user_meta_data->>'picture',
+      NEW.raw_user_meta_data->>'avatar'
+  );
+
+  -- Safely parse role
+  selected_role := COALESCE(
+      (NEW.raw_user_meta_data->>'role')::public.user_role, 
+      'tenant'::public.user_role
+  );
+
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
   VALUES (
       NEW.id, 
-      NEW.raw_user_meta_data->>'full_name', 
-      NEW.raw_user_meta_data->>'avatar_url',
-      COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'tenant')
+      full_name_val, 
+      avatar_url_val,
+      selected_role
   );
   RETURN NEW;
 END;

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
-import { subscribeToAuth, getUserProfile, logout as backendLogout } from '../services/supabaseService';
+import { subscribeToAuth, getUserProfile, logout as backendLogout, ensureUserProfileExists } from '../services/supabaseService';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 
@@ -53,7 +53,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setSupabaseUser(session.user);
-          const profile = await getUserProfile(session.user.id);
+          let profile = await getUserProfile(session.user.id);
+          if (!profile) {
+            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+            if (oauthSelectedRole) {
+              localStorage.removeItem('oauth_selected_role');
+            }
+            profile = await ensureUserProfileExists(session.user.id, session.user.email, session.user.user_metadata, oauthSelectedRole);
+          } else {
+            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+            if (oauthSelectedRole) {
+              localStorage.removeItem('oauth_selected_role');
+              profile = await ensureUserProfileExists(session.user.id, session.user.email, session.user.user_metadata, oauthSelectedRole);
+            }
+          }
           setUser({ ...profile, email: session.user.email } as any); // Include email
         } else {
           setSupabaseUser(null);
@@ -87,7 +100,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setSupabaseUser(sUser);
       if (sUser) {
-        const profile = await getUserProfile(sUser.id || sUser.uid);
+        let profile = await getUserProfile(sUser.id || sUser.uid);
+        if (!profile) {
+          const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+          if (oauthSelectedRole) {
+            localStorage.removeItem('oauth_selected_role');
+          }
+          profile = await ensureUserProfileExists(sUser.id || sUser.uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
+        } else {
+          const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+          if (oauthSelectedRole) {
+            localStorage.removeItem('oauth_selected_role');
+            profile = await ensureUserProfileExists(sUser.id || sUser.uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
+          }
+        }
         setUser({ ...profile, email: sUser.email } as any); // Include email
       } else {
         setUser(null);

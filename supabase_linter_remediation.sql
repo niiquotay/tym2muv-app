@@ -127,3 +127,63 @@ ALTER FUNCTION public.log_property_view(uuid, uuid, text) SECURITY INVOKER;
 ALTER FUNCTION public.log_property_view(uuid, uuid, text) SET search_path = public;
 GRANT EXECUTE ON FUNCTION public.log_property_view(uuid, uuid, text) TO anon, authenticated, service_role;
 
+-- ==========================================
+-- STEP 6: SOCIAL AUTH USER REGISTRATION FIXED
+-- ==========================================
+-- 6.1 Add profiles insert policy to allow clients to create/fallback profiles
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- 6.2 Recreate handle_new_user to be robust against missing social auth name keys (null values)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  selected_role public.user_role;
+  full_name_val TEXT;
+  avatar_url_val TEXT;
+BEGIN
+  -- Coalesce name from multiple keys sent by social providers or fallback to email local part
+  full_name_val := COALESCE(
+      NEW.raw_user_meta_data->>'full_name', 
+      NEW.raw_user_meta_data->>'name',
+      NEW.raw_user_meta_data->>'given_name',
+      split_part(NEW.email, '@', 1),
+      'User'
+  );
+  
+  -- Coalesce avatar url from picture, avatar_url, etc.
+  avatar_url_val := COALESCE(
+      NEW.raw_user_meta_data->>'avatar_url',
+      NEW.raw_user_meta_data->>'picture',
+      NEW.raw_user_meta_data->>'avatar'
+  );
+
+  -- Safely parse role
+  selected_role := COALESCE(
+      (NEW.raw_user_meta_data->>'role')::public.user_role, 
+      'tenant'::public.user_role
+  );
+
+  INSERT INTO public.profiles (id, full_name, avatar_url, role)
+  VALUES (
+      NEW.id, 
+      full_name_val, 
+      avatar_url_val,
+      selected_role
+  );
+  
+  -- If role is agent, insert into agents table
+  IF selected_role = 'agent' THEN
+      INSERT INTO public.agents (id, company_name)
+      VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'company_name', ''));
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Recreate trigger just to make sure it's active
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+

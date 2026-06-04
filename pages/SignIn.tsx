@@ -33,7 +33,7 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
       setIsLoading(true);
       setError(null);
       localStorage.setItem('oauth_selected_role', selectedRole);
-      await loginWithGoogle();
+      await loginWithGoogle(selectedRole);
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google.');
       console.error(err);
@@ -46,7 +46,7 @@ const SignIn: React.FC<SignInProps> = ({ defaultTab }) => {
       setIsLoading(true);
       setError(null);
       localStorage.setItem('oauth_selected_role', selectedRole);
-      await loginWithLinkedIn();
+      await loginWithLinkedIn(selectedRole);
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with LinkedIn.');
       console.error(err);
