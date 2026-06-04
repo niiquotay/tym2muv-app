@@ -34,95 +34,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      const mockStr = localStorage.getItem('caliber_mock_user');
-      if (mockStr) {
-        try {
-          const mockUser = JSON.parse(mockStr);
-          setUser(mockUser);
-          setSupabaseUser(null);
-          setLoading(false);
-          setIsAuthReady(true);
-          return;
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setSupabaseUser(session.user);
-          let profile = await getUserProfile(session.user.id);
-          if (!profile) {
-            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
-            if (oauthSelectedRole) {
-              localStorage.removeItem('oauth_selected_role');
-            }
-            profile = await ensureUserProfileExists(session.user.id, session.user.email, session.user.user_metadata, oauthSelectedRole);
-          } else {
-            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
-            if (oauthSelectedRole) {
-              localStorage.removeItem('oauth_selected_role');
-              profile = await ensureUserProfileExists(session.user.id, session.user.email, session.user.user_metadata, oauthSelectedRole);
-            }
-          }
-          setUser({ ...profile, email: session.user.email } as any); // Include email
-        } else {
-          setSupabaseUser(null);
-          setUser(null);
-        }
-      } catch (err) {
-        console.warn('Failed to retrieve Supabase session:', err);
-        setSupabaseUser(null);
-        setUser(null);
-      }
-      setLoading(false);
-      setIsAuthReady(true);
-    };
-
-    initAuth();
+    let active = true;
 
     const unsubscribe = subscribeToAuth(async (sUser) => {
       const mockStr = localStorage.getItem('caliber_mock_user');
       if (mockStr) {
         try {
           const mockUser = JSON.parse(mockStr);
-          setUser(mockUser);
-          setSupabaseUser(null);
-          setLoading(false);
-          setIsAuthReady(true);
+          if (active) {
+            setUser(mockUser);
+            setSupabaseUser(null);
+            setLoading(false);
+            setIsAuthReady(true);
+          }
           return;
         } catch (e) {
           // ignore
         }
       }
 
-      setSupabaseUser(sUser);
+      if (active) {
+        setSupabaseUser(sUser);
+      }
+
       if (sUser) {
-        let profile = await getUserProfile(sUser.id || sUser.uid);
+        let profile = await getUserProfile(sUser.id || (sUser as any).uid);
         if (!profile) {
           const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
           if (oauthSelectedRole) {
             localStorage.removeItem('oauth_selected_role');
           }
-          profile = await ensureUserProfileExists(sUser.id || sUser.uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
+          profile = await ensureUserProfileExists(sUser.id || (sUser as any).uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
         } else {
           const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
           if (oauthSelectedRole) {
             localStorage.removeItem('oauth_selected_role');
-            profile = await ensureUserProfileExists(sUser.id || sUser.uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
+            profile = await ensureUserProfileExists(sUser.id || (sUser as any).uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
           }
         }
-        setUser({ ...profile, email: sUser.email } as any); // Include email
+        if (active) {
+          setUser({ ...profile, email: sUser.email } as any);
+        }
       } else {
-        setUser(null);
+        if (active) {
+          setUser(null);
+        }
       }
-      setLoading(false);
-      setIsAuthReady(true);
+
+      if (active) {
+        setLoading(false);
+        setIsAuthReady(true);
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const isAuthenticated = !!user;
