@@ -256,6 +256,7 @@ CREATE OR REPLACE FUNCTION public.custom_handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   selected_role public.user_role;
+  raw_role_text TEXT;
   full_name_val TEXT;
   avatar_url_val TEXT;
 BEGIN
@@ -275,11 +276,39 @@ BEGIN
       NEW.raw_user_meta_data->>'avatar'
   );
 
-  -- Safely parse role
-  selected_role := COALESCE(
-      (NEW.raw_user_meta_data->>'role')::public.user_role, 
-      'tenant'::public.user_role
-  );
+  -- Safely extract and normalize the requested role text
+  raw_role_text := LOWER(COALESCE(NEW.raw_user_meta_data->>'role', 'tenant'));
+
+  -- Try to parse/cast the role to public.user_role
+  BEGIN
+    -- 1. Try casting the raw role (e.g. 'agent', 'tenant', 'user')
+    selected_role := raw_role_text::public.user_role;
+  EXCEPTION WHEN OTHERS THEN
+    BEGIN
+      -- 2. If casting failed (e.g. 'tenant' is not in enum, or 'user' is not in enum),
+      -- try the alternative default role
+      IF raw_role_text = 'tenant' THEN
+        selected_role := 'user'::public.user_role;
+      ELSIF raw_role_text = 'user' THEN
+        selected_role := 'tenant'::public.user_role;
+      ELSE
+        -- If it was something else like 'agent' or 'admin' but failed, try fallback
+        selected_role := 'tenant'::public.user_role;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      -- 3. Last resort: fallback to the default 'user' role
+      BEGIN
+        selected_role := 'user'::public.user_role;
+      EXCEPTION WHEN OTHERS THEN
+        -- If even 'user' doesn't exist, get the first available enum value from pg_type
+        SELECT enumlabel::public.user_role INTO selected_role
+        FROM pg_enum
+        WHERE enumtypid = 'public.user_role'::regtype
+        ORDER BY enumsortorder
+        LIMIT 1;
+      END;
+    END;
+  END;
 
   INSERT INTO public.profiles (id, full_name, avatar_url, role)
   VALUES (
@@ -289,12 +318,22 @@ BEGIN
       selected_role
   );
   
-  -- If role is agent, insert into agents table (only if agents table exists in this schema, otherwise it's just public.profiles)
-  -- In this schema, we don't have agents table, but let's check: actually, supabase_production_schema.sql doesn't have agents table?
-  -- Wait, let's verify if agents table exists in supabase_production_schema.sql.
+  -- If role is agent, insert into agents table (only if agents table exists in this schema, otherwise skip)
+  IF selected_role::text = 'agent' THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agents') THEN
+      EXECUTE 'INSERT INTO public.agents (id, company_name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING' USING NEW.id, COALESCE(NEW.raw_user_meta_data->>'company_name', '');
+    END IF;
+  END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  RETURN public.custom_handle_new_user();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

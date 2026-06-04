@@ -184,6 +184,14 @@ export const loginWithLinkedIn = async (role?: string) => {
 
 // --- USER SERVICES ---
 const mapProfileToUser = (profileData: any): User => {
+  // Map database role (lowercase) to capitalized UI role (Tenant / Agent / Admin)
+  const mappedRole = (() => {
+    const r = (profileData.role || '').toLowerCase();
+    if (r === 'agent') return 'Agent';
+    if (r === 'admin' || r === 'super_admin') return 'Admin';
+    return 'Tenant'; // Default mapping for 'tenant', 'user', 'customer', or empty
+  })();
+
   return {
     id: profileData.id,
     name: profileData.full_name || 'Unknown',
@@ -194,7 +202,7 @@ const mapProfileToUser = (profileData: any): User => {
     memberSince: profileData.created_at || new Date().toISOString(),
     bio: profileData.bio || '',
     verified: profileData.verified || false,
-    role: profileData.role || 'Customer',
+    role: mappedRole,
     savedListings: profileData.savedListings || [],
     socials: profileData.socials || {}
   };
@@ -274,23 +282,42 @@ export const ensureUserProfileExists = async (
       const fullName = metadata?.full_name || metadata?.name || metadata?.given_name || (email ? email.split('@')[0] : 'User');
       const avatarUrl = metadata?.avatar_url || metadata?.picture || metadata?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=random`;
 
-      const { data: newProfile, error: insertError } = await supabase
+      // Attempt to insert the profile. Fall back between 'tenant' and 'user' if there are database enum incompatibilities
+      let insertRole = targetRole;
+      let { data: newProfile, error: insertError } = await supabase
         .from('profiles')
         .insert({
           id: userId,
           full_name: fullName,
           avatar_url: avatarUrl,
-          role: targetRole
+          role: insertRole
         })
         .select()
         .single();
 
       if (insertError) {
-        console.error('Failed to create fallback user profile:', insertError);
+        console.warn('Initial profile insert failed, retrying with fallback role...', insertError);
+        insertRole = targetRole === 'tenant' ? 'user' : 'tenant';
+        const retryResult = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            full_name: fullName,
+            avatar_url: avatarUrl,
+            role: insertRole
+          })
+          .select()
+          .single();
+        newProfile = retryResult.data;
+        insertError = retryResult.error;
+      }
+
+      if (insertError) {
+        console.error('Failed to create fallback user profile after retry:', insertError);
         return null;
       }
 
-      if (targetRole === 'agent') {
+      if (insertRole === 'agent') {
         const { error: agentError } = await supabase
           .from('agents')
           .insert({ id: userId, verification_status: 'pending' });
@@ -303,15 +330,26 @@ export const ensureUserProfileExists = async (
       return mapProfileToUser(newProfile);
     } else {
       if (selectedRole && profile.role !== targetRole) {
-        const { error: updateError } = await supabase
+        let updateRole = targetRole;
+        let { error: updateError } = await supabase
           .from('profiles')
-          .update({ role: targetRole })
+          .update({ role: updateRole })
           .eq('id', userId);
 
+        if (updateError) {
+          console.warn('Initial role update failed, retrying with fallback role...', updateError);
+          updateRole = targetRole === 'tenant' ? 'user' : 'tenant';
+          const retryUpdate = await supabase
+            .from('profiles')
+            .update({ role: updateRole })
+            .eq('id', userId);
+          updateError = retryUpdate.error;
+        }
+
         if (!updateError) {
-          profile.role = targetRole;
+          profile.role = updateRole;
           
-          if (targetRole === 'agent') {
+          if (updateRole === 'agent') {
             const { data: agentData } = await supabase
               .from('agents')
               .select('id')
@@ -514,7 +552,7 @@ export const getListings = async (filters?: SearchFilters): Promise<{ listings: 
     return await withCache(cacheKey('listings', filters || 'all'), async () => {
       let query = supabase
         .from('properties')
-        .select('*, seller:profiles!agent_id(*)', { count: 'exact' });
+        .select('*', { count: 'exact' });
 
       if (!filters?.isAdminQuery) {
         query = query.eq('status', 'approved');
