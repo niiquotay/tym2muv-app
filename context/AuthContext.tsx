@@ -37,53 +37,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let active = true;
 
     const unsubscribe = subscribeToAuth(async (sUser) => {
-      const mockStr = localStorage.getItem('caliber_mock_user');
-      if (mockStr) {
-        try {
-          const mockUser = JSON.parse(mockStr);
-          if (active) {
-            setUser(mockUser);
-            setSupabaseUser(null);
-            setLoading(false);
-            setIsAuthReady(true);
-          }
-          return;
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      if (active) {
-        setSupabaseUser(sUser);
-      }
-
-      if (sUser) {
-        let profile = await getUserProfile(sUser.id || (sUser as any).uid);
-        if (!profile) {
-          const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
-          if (oauthSelectedRole) {
-            localStorage.removeItem('oauth_selected_role');
-          }
-          profile = await ensureUserProfileExists(sUser.id || (sUser as any).uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
-        } else {
-          const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
-          if (oauthSelectedRole) {
-            localStorage.removeItem('oauth_selected_role');
-            profile = await ensureUserProfileExists(sUser.id || (sUser as any).uid, sUser.email, sUser.user_metadata, oauthSelectedRole);
+      console.log("[AuthContext] subscribeToAuth callback triggered with sUser:", sUser);
+      
+      try {
+        const mockStr = localStorage.getItem('caliber_mock_user');
+        
+        // Prioritize mock user ONLY if there is no active Supabase session (sUser is null)
+        if (mockStr && !sUser) {
+          try {
+            const mockUser = JSON.parse(mockStr);
+            console.log("[AuthContext] Fallback to mock user from localStorage:", mockUser);
+            if (active) {
+              setUser(mockUser);
+              setSupabaseUser(null);
+            }
+            return;
+          } catch (e) {
+            console.warn("[AuthContext] Failed to parse caliber_mock_user:", e);
           }
         }
+
         if (active) {
-          setUser({ ...profile, email: sUser.email } as any);
+          setSupabaseUser(sUser);
         }
-      } else {
+
+        if (sUser) {
+          // Clear any stale mock user from localStorage as we have a real Supabase session
+          if (localStorage.getItem('caliber_mock_user')) {
+            console.log("[AuthContext] Real session active. Clearing stale caliber_mock_user.");
+            localStorage.removeItem('caliber_mock_user');
+          }
+
+          const userId = sUser.id || (sUser as any).uid;
+          console.log("[AuthContext] Loading profile for user ID:", userId);
+          
+          let profile = await getUserProfile(userId);
+          console.log("[AuthContext] Retried getUserProfile result:", profile);
+          
+          if (!profile) {
+            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+            console.log("[AuthContext] Profile missing in database. Selected role from OAuth flow:", oauthSelectedRole);
+            if (oauthSelectedRole) {
+              localStorage.removeItem('oauth_selected_role');
+            }
+            profile = await ensureUserProfileExists(userId, sUser.email, sUser.user_metadata, oauthSelectedRole);
+            console.log("[AuthContext] Created missing profile:", profile);
+          } else {
+            const oauthSelectedRole = localStorage.getItem('oauth_selected_role') || undefined;
+            if (oauthSelectedRole) {
+              console.log("[AuthContext] Profile exists. Clearing oauth_selected_role & updating role if mismatched:", oauthSelectedRole);
+              localStorage.removeItem('oauth_selected_role');
+              profile = await ensureUserProfileExists(userId, sUser.email, sUser.user_metadata, oauthSelectedRole);
+            }
+          }
+          
+          if (active) {
+            console.log("[AuthContext] Setting active user profile:", profile);
+            setUser({ ...profile, email: sUser.email } as any);
+          }
+        } else {
+          if (active) {
+            console.log("[AuthContext] No active session (sUser is null). Setting user to null.");
+            setUser(null);
+          }
+        }
+      } catch (err) {
+        console.error("[AuthContext] Uncaught error during auth state change subscriber processing:", err);
         if (active) {
           setUser(null);
         }
-      }
-
-      if (active) {
-        setLoading(false);
-        setIsAuthReady(true);
+      } finally {
+        if (active) {
+          setLoading(false);
+          setIsAuthReady(true);
+        }
       }
     });
 
