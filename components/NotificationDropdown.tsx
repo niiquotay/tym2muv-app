@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
 const MOCK_NOTIFICATIONS = [
-  { id: 1, title: 'Welcome', text: 'Welcome to CaliberDesk real estate network!', time: '5m ago', read: false, link: '/profile/me' },
+  { id: 1, title: 'New Message', text: 'You have a new message from Agent John', time: '5m ago', read: false, link: '/chat' },
   { id: 2, title: 'Property Update', text: 'Price dropped for "Luxury Villa in Cantonments"', time: '1h ago', read: false, link: '/listing/1' },
   { id: 3, title: 'Payment Success', text: 'Your premium ad payment was successful.', time: '1d ago', read: true, link: '/profile/me' },
 ];

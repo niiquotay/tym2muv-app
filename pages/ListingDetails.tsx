@@ -172,7 +172,13 @@ const ListingDetails: React.FC = () => {
   const area = locationParts[0] || '';
   const city = locationParts[1] || '';
 
-
+  const handleChat = () => {
+    if (seller) {
+      navigate(`/chat?to=${seller.id}`);
+    } else {
+      navigate('/signin');
+    }
+  };
 
   const triggerSafetyCheck = (action: () => void) => {
     setSafetyAction(() => action);
@@ -432,29 +438,38 @@ const ListingDetails: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
+              <div className="pt-4 grid grid-cols-2 gap-3" onClick={(e) => e.stopPropagation()}>
                 <button 
-                  onClick={() => triggerSafetyCheck(() => handleRequestView())}
-                  disabled={isDeliveryRequested}
-                  className="flex-1 px-3 py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                  onClick={handleChat}
+                  className="px-3 py-3 bg-slate-900 hover:bg-black text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                 >
-                  {isDeliveryRequested ? (
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Icon name="calendar" size={16} />
-                      Book Viewing
-                    </>
-                  )}
+                  <Icon name="messageCircle" size={16} />
+                  Message
                 </button>
-                {seller?.socials.phone && (
+                <div className="flex gap-2">
                   <button 
-                    onClick={() => triggerSafetyCheck(() => window.location.href = `tel:${seller.socials.phone}`)}
-                    className="flex-none w-12 py-3 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2"
+                    onClick={() => triggerSafetyCheck(() => handleRequestView())}
+                    disabled={isDeliveryRequested}
+                    className="flex-1 px-3 py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Icon name="phone" size={16} />
+                    {isDeliveryRequested ? (
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Icon name="calendar" size={16} />
+                        Book Viewing
+                      </>
+                    )}
                   </button>
-                )}
+                  {seller?.socials.phone && (
+                    <button 
+                      onClick={() => triggerSafetyCheck(() => window.location.href = `tel:${seller.socials.phone}`)}
+                      className="flex-none w-12 py-3 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Icon name="phone" size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -16,7 +16,7 @@ const CreateVendor = lazy(() => import('./pages/CreateVendor'));
 const ListingDetails = lazy(() => import('./pages/ListingDetails'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const Profile = lazy(() => import('./pages/Profile'));
-
+const Chat = lazy(() => import('./pages/Chat'));
 const SavedListings = lazy(() => import('./pages/SavedListings'));
 const Settings = lazy(() => import('./pages/Settings'));
 const SignIn = lazy(() => import('./pages/SignIn'));
@@ -179,7 +179,11 @@ const App: React.FC = () => {
                       <Profile />
                     </ProtectedRoute>
                   } />
-
+                  <Route path="/chat" element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/saved" element={
                     <ProtectedRoute>
                       <SavedListings />

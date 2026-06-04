@@ -222,6 +222,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                           </Link>
                         )}
                         <NotificationDropdown />
+                        <Link to="/chat" className="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-all relative group">
+                        <Icon name="messageCircle" size={20} className="w-5 h-5" />
+                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 border border-white rounded-full"></span>
+                        </Link>
                         <ProfileDropdown />
                     </>
                     ) : (
