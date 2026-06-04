@@ -219,6 +219,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+-- Revoke execution rights on signup triggers from public, anon, and authenticated to secure them
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.custom_handle_new_user() FROM PUBLIC, anon, authenticated;
+
 -- Recreate trigger just to make sure it's active
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -229,7 +233,8 @@ CREATE TRIGGER on_auth_user_created
 -- ==========================================
 -- STEP 7: CREATE AD CLICK/IMPRESSION STATS FUNCTION
 -- ==========================================
-CREATE OR REPLACE FUNCTION public.increment_ad_stat(ad_id uuid, field text)
+-- Define private definer helper function
+CREATE OR REPLACE FUNCTION private.increment_ad_stat_definer(ad_id uuid, field text)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -241,6 +246,20 @@ BEGIN
   ELSIF field = 'impressions' THEN
     UPDATE public.monetization_ads SET impressions = impressions + 1 WHERE id = ad_id;
   END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION private.increment_ad_stat_definer(uuid, text) TO anon, authenticated, service_role;
+
+-- Define public invoker wrapper function
+CREATE OR REPLACE FUNCTION public.increment_ad_stat(ad_id uuid, field text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM private.increment_ad_stat_definer(ad_id, field);
 END;
 $$;
 

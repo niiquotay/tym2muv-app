@@ -286,6 +286,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Revoke execution rights on signup triggers from public, anon, and authenticated to secure them
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.custom_handle_new_user() FROM PUBLIC, anon, authenticated;
+
 -- ONLY RUN ONCE IF NOT EXISTS
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
