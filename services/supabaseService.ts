@@ -184,6 +184,23 @@ export const loginWithLinkedIn = async (role?: string) => {
 
 // --- USER SERVICES ---
 const mapProfileToUser = (profileData: any): User => {
+  if (!profileData) {
+    return {
+      id: '',
+      name: 'Unknown',
+      avatar: 'https://ui-avatars.com/api/?name=Unknown&background=random',
+      rating: 0,
+      reviewCount: 0,
+      location: 'Unknown',
+      memberSince: new Date().toISOString(),
+      bio: '',
+      verified: false,
+      role: 'Tenant',
+      savedListings: [],
+      socials: {}
+    };
+  }
+
   // Map database role (lowercase) to capitalized UI role (Tenant / Agent / Admin)
   const mappedRole = (() => {
     const r = (profileData.role || '').toLowerCase();
@@ -195,7 +212,7 @@ const mapProfileToUser = (profileData: any): User => {
   return {
     id: profileData.id,
     name: profileData.full_name || 'Unknown',
-    avatar: profileData.avatar_url || 'https://ui-avatars.com/api/?name=Unknown&background=random',
+    avatar: profileData.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profileData.full_name || 'Unknown')}&background=random`,
     rating: profileData.rating || 0,
     reviewCount: profileData.review_count || 0,
     location: profileData.location || 'Unknown',
@@ -312,8 +329,8 @@ export const ensureUserProfileExists = async (
         insertError = retryResult.error;
       }
 
-      if (insertError) {
-        console.error('Failed to create fallback user profile after retry, using local fallback:', insertError);
+      if (insertError || !newProfile) {
+        console.error('Failed to create fallback user profile after retry or empty select:', insertError);
         return {
           id: userId,
           name: fullName,
